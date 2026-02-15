@@ -6,18 +6,24 @@ import "fmt"
 type Kind int
 
 const (
-	Unknown       Kind = iota
-	InvalidInput       // maps to 400
-	Unreachable        // maps to 502
-	ParsingFailed      // maps to 500
+	// Unknown represents an unclassified error.
+	Unknown Kind = iota
+	// InvalidInput indicates the request was malformed (HTTP 400).
+	InvalidInput
+	// Unreachable indicates the target URL could not be reached (HTTP 502).
+	Unreachable
+	// Timeout indicates the target took too long to respond (HTTP 504).
+	Timeout
+	// ParsingFailed indicates the response could not be parsed (HTTP 500).
+	ParsingFailed
 )
 
 // AppError carries a category, user message, and original cause.
 type AppError struct {
-	Kind    Kind
-	Code    int // HTTP status code returned by the target domain
-	Message string
-	Cause   error
+	Kind           Kind
+	UpstreamStatus int // HTTP status code returned by the target domain
+	Message        string
+	Cause          error
 }
 
 func (e *AppError) Error() string {

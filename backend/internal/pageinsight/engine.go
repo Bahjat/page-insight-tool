@@ -62,9 +62,9 @@ func (e *Engine) Analyze(ctx context.Context, targetURL string) (*model.PageAnal
 
 	if statusCode >= 400 {
 		return nil, &errs.AppError{
-			Kind:    errs.Unreachable,
-			Code:    statusCode,
-			Message: "The provided URL returned an error status.",
+			Kind:           errs.Unreachable,
+			UpstreamStatus: statusCode,
+			Message:        "The provided URL returned an error status.",
 		}
 	}
 
