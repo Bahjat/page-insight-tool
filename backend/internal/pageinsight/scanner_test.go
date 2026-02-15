@@ -26,6 +26,7 @@ func TestCheckLinksWithWorkerPool(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 	mux.HandleFunc("/redirect", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Location", "/ok")
 		w.WriteHeader(http.StatusMovedPermanently)
 	})
 	mux.HandleFunc("/not-found", func(w http.ResponseWriter, _ *http.Request) {
@@ -70,9 +71,9 @@ func TestCheckLinksWithWorkerPool(t *testing.T) {
 			expected: 0,
 		},
 		{
-			name:     "malformed URL skipped",
+			name:     "malformed URL counted as inaccessible",
 			links:    []string{"://bad-url", ts.URL + "/ok"},
-			expected: 0,
+			expected: 1,
 		},
 		{
 			name:     "403 counted as inaccessible",

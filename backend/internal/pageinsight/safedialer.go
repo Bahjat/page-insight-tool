@@ -55,8 +55,8 @@ func isBlockedIP(addr netip.Addr) bool {
 	// mapped addresses cannot bypass IPv4 checks.
 	addr = addr.Unmap()
 
-	// Block everything that isn't globally routable unicast.
-	if !addr.IsGlobalUnicast() {
+	// Block private addresses or everything that isn't globally routable unicast.
+	if !addr.IsGlobalUnicast() || addr.IsPrivate() {
 		return true
 	}
 

@@ -44,7 +44,7 @@ func newLinkChecker(concurrency int, transport http.RoundTripper) *LinkChecker {
 func (lc *LinkChecker) checkLink(ctx context.Context, link string) bool {
 	req, err := http.NewRequestWithContext(ctx, http.MethodHead, link, nil)
 	if err != nil {
-		return false // malformed URL
+		return true // malformed URL is inaccessible
 	}
 
 	resp, err := lc.client.Do(req)
