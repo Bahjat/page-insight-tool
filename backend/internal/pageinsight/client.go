@@ -25,7 +25,10 @@ type HTTPClient struct {
 	client *http.Client
 }
 
-const maxRedirects = 5
+const (
+	maxRedirects = 5
+	userAgent    = "PageInsightBot/1.0"
+)
 
 var (
 	errTooManyRedirects = errors.New("too many redirects")
@@ -41,8 +44,8 @@ func NewHTTPClient() *HTTPClient {
 			Timeout: 10 * time.Second,
 			Transport: &http.Transport{
 				DialContext:         safeDialer().DialContext,
-				MaxConnsPerHost:     5,
-				MaxIdleConnsPerHost: 2,
+				MaxConnsPerHost:     10,
+				MaxIdleConnsPerHost: 10,
 				IdleConnTimeout:     90 * time.Second,
 			},
 			CheckRedirect: safeRedirectPolicy,
@@ -67,7 +70,7 @@ func (c *HTTPClient) Fetch(ctx context.Context, targetURL string) (io.ReadCloser
 	if err != nil {
 		return nil, 0, err
 	}
-	req.Header.Set("User-Agent", "PageInsightBot/1.0")
+	req.Header.Set("User-Agent", userAgent)
 	req.Header.Set("Accept", "text/html")
 
 	resp, err := c.client.Do(req) //nolint:bodyclose // body is returned to caller via limitedReadCloser

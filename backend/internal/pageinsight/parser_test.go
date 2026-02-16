@@ -192,6 +192,54 @@ func TestParse_Links(t *testing.T) {
 	}
 }
 
+func TestParse_LinkWithNoHref(t *testing.T) {
+	// Covers extractAttr returning "" when the target attribute is absent.
+	html := `<!DOCTYPE html><html><head><title>T</title></head><body>
+	<a class="nav">No href</a>
+	<a href="https://example.com/real">Real</a>
+	</body></html>`
+
+	base := mustParseURL("https://example.com")
+	result, err := Parse(strings.NewReader(html), base)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(result.Links) != 1 {
+		t.Errorf("Links = %d, want 1 (anchor without href should be skipped)", len(result.Links))
+	}
+}
+
+func TestParse_JavaScriptHref(t *testing.T) {
+	// Covers classifyLink skipping non-http schemes.
+	html := `<!DOCTYPE html><html><head><title>T</title></head><body>
+	<a href="javascript:void(0)">JS</a>
+	<a href="tel:+1234567890">Call</a>
+	</body></html>`
+
+	base := mustParseURL("https://example.com")
+	result, err := Parse(strings.NewReader(html), base)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(result.Links) != 0 {
+		t.Errorf("Links = %d, want 0 (non-http schemes should be skipped)", len(result.Links))
+	}
+}
+
+func TestParse_UnknownPublicDoctype(t *testing.T) {
+	// Covers detectHTMLVersion default "Unknown" for unrecognized PUBLIC doctypes.
+	html := `<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2 Final//EN"><html><head><title>T</title></head><body></body></html>`
+
+	base := mustParseURL("https://example.com")
+	result, err := Parse(strings.NewReader(html), base)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.HTMLVersion != "Unknown" {
+		t.Errorf("HTMLVersion = %q, want %q", result.HTMLVersion, "Unknown")
+	}
+}
+
 func TestParse_LoginForm(t *testing.T) {
 	tests := []struct {
 		name     string

@@ -2,6 +2,7 @@ package pageinsight
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"sync"
 	"time"
@@ -15,7 +16,7 @@ type LinkChecker struct {
 	concurrency int
 }
 
-// NewLinkChecker returns a LinkChecker with a 5s timeout that does not follow
+// NewLinkChecker returns a LinkChecker with a 4s timeout that does not follow
 // redirects and blocks connections to private/reserved IP ranges.
 // The concurrency parameter controls the worker pool size.
 func NewLinkChecker(concurrency int) *LinkChecker {
@@ -48,6 +49,7 @@ func (lc *LinkChecker) checkLink(ctx context.Context, link string) bool {
 	if err != nil {
 		return true // malformed URL is inaccessible
 	}
+	req.Header.Set("User-Agent", userAgent)
 
 	resp, err := lc.client.Do(req)
 	if err != nil {
@@ -68,21 +70,23 @@ func (lc *LinkChecker) getProbe(ctx context.Context, link string) bool {
 	if err != nil {
 		return true
 	}
+	req.Header.Set("User-Agent", userAgent)
 	req.Header.Set("Range", "bytes=0-0")
 
 	resp, err := lc.client.Do(req)
 	if err != nil {
 		return ctx.Err() == nil
 	}
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
 	_ = resp.Body.Close()
 
 	return resp.StatusCode >= 400
 }
 
-// CheckLinksWithWorkerPool validates a list of URLs concurrently using a pool
+// CheckLinks validates a list of URLs concurrently using a pool
 // of worker goroutines sized by the configured concurrency and returns the
 // count of inaccessible links. Processes at most 1000 links.
-func (lc *LinkChecker) CheckLinksWithWorkerPool(ctx context.Context, links []string) int {
+func (lc *LinkChecker) CheckLinks(ctx context.Context, links []string) int {
 	limit := min(len(links), maxLinks)
 	links = links[:limit]
 
@@ -99,6 +103,10 @@ func (lc *LinkChecker) CheckLinksWithWorkerPool(ctx context.Context, links []str
 	for range numWorkers {
 		wg.Go(func() {
 			for link := range jobs {
+				if ctx.Err() != nil {
+					results <- false
+					continue
+				}
 				results <- lc.checkLink(ctx, link)
 			}
 		})

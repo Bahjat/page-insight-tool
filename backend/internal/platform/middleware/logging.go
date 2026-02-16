@@ -38,11 +38,14 @@ type responseWriter struct {
 	wroteHeader bool
 }
 
+// WriteHeader captures the status code on the first call and ignores
+// subsequent calls to avoid the "superfluous WriteHeader" warning from net/http.
 func (rw *responseWriter) WriteHeader(code int) {
-	if !rw.wroteHeader {
-		rw.status = code
-		rw.wroteHeader = true
+	if rw.wroteHeader {
+		return
 	}
+	rw.status = code
+	rw.wroteHeader = true
 	rw.ResponseWriter.WriteHeader(code)
 }
 

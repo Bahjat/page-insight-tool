@@ -10,7 +10,7 @@ import (
 
 // linkChecker defines how the engine validates link accessibility.
 type linkChecker interface {
-	CheckLinksWithWorkerPool(ctx context.Context, links []string) int
+	CheckLinks(ctx context.Context, links []string) int
 }
 
 // Engine orchestrates page fetching, HTML parsing, and link checking.
@@ -79,7 +79,7 @@ func (e *Engine) Analyze(ctx context.Context, targetURL string) (*model.PageAnal
 
 	// Deduplicate links for accessibility checking.
 	seen := make(map[string]struct{}, len(parseResult.Links))
-	var uniqueURLs []string
+	uniqueURLs := make([]string, 0, len(parseResult.Links))
 	var internalCount, externalCount int
 	for _, link := range parseResult.Links {
 		if link.IsInternal {
@@ -93,7 +93,7 @@ func (e *Engine) Analyze(ctx context.Context, targetURL string) (*model.PageAnal
 		}
 	}
 
-	inaccessible := e.linkChecker.CheckLinksWithWorkerPool(ctx, uniqueURLs)
+	inaccessible := e.linkChecker.CheckLinks(ctx, uniqueURLs)
 
 	return &model.PageAnalysis{
 		URL:         targetURL,
