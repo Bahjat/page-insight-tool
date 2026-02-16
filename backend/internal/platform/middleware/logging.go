@@ -23,7 +23,6 @@ func Logging(logger *slog.Logger) func(http.Handler) http.Handler {
 				"path", r.URL.Path,
 				"status", rw.status,
 				"duration", time.Since(start).String(),
-				"remote_addr", r.RemoteAddr,
 				"user_agent", r.UserAgent(),
 				"request_id", requestid.FromContext(r.Context()),
 			)
