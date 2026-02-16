@@ -35,7 +35,15 @@ func TestCheckLinksWithWorkerPool(t *testing.T) {
 	mux.HandleFunc("/server-error", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	})
-	mux.HandleFunc("/forbidden", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/forbidden", func(w http.ResponseWriter, r *http.Request) {
+		// Simulate servers that block HEAD but allow GET.
+		if r.Method == http.MethodHead {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+	mux.HandleFunc("/true-forbidden", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
 	})
 	mux.HandleFunc("/unauthorized", func(w http.ResponseWriter, _ *http.Request) {
@@ -76,8 +84,13 @@ func TestCheckLinksWithWorkerPool(t *testing.T) {
 			expected: 1,
 		},
 		{
-			name:     "403 counted as inaccessible",
+			name:     "403 on HEAD triggers GET fallback and succeeds",
 			links:    []string{ts.URL + "/forbidden"},
+			expected: 0,
+		},
+		{
+			name:     "true 403 on both HEAD and GET is inaccessible",
+			links:    []string{ts.URL + "/true-forbidden"},
 			expected: 1,
 		},
 		{
@@ -86,8 +99,8 @@ func TestCheckLinksWithWorkerPool(t *testing.T) {
 			expected: 1,
 		},
 		{
-			name:     "403 and 404 both counted as inaccessible",
-			links:    []string{ts.URL + "/forbidden", ts.URL + "/not-found"},
+			name:     "true 403 and 404 both counted as inaccessible",
+			links:    []string{ts.URL + "/true-forbidden", ts.URL + "/not-found"},
 			expected: 2,
 		},
 	}

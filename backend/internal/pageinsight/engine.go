@@ -77,19 +77,23 @@ func (e *Engine) Analyze(ctx context.Context, targetURL string) (*model.PageAnal
 		}
 	}
 
-	// Collect link URLs for accessibility checking.
-	var linkURLs []string
+	// Deduplicate links for accessibility checking.
+	seen := make(map[string]struct{}, len(parseResult.Links))
+	var uniqueURLs []string
 	var internalCount, externalCount int
 	for _, link := range parseResult.Links {
-		linkURLs = append(linkURLs, link.URL)
 		if link.IsInternal {
 			internalCount++
 		} else {
 			externalCount++
 		}
+		if _, dup := seen[link.URL]; !dup {
+			seen[link.URL] = struct{}{}
+			uniqueURLs = append(uniqueURLs, link.URL)
+		}
 	}
 
-	inaccessible := e.linkChecker.CheckLinksWithWorkerPool(ctx, linkURLs)
+	inaccessible := e.linkChecker.CheckLinksWithWorkerPool(ctx, uniqueURLs)
 
 	return &model.PageAnalysis{
 		URL:         targetURL,

@@ -31,7 +31,7 @@ func newLinkChecker(concurrency int, transport http.RoundTripper) *LinkChecker {
 	return &LinkChecker{
 		concurrency: concurrency,
 		client: &http.Client{
-			Timeout:   5 * time.Second,
+			Timeout:   4 * time.Second,
 			Transport: transport,
 			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
 				return http.ErrUseLastResponse
@@ -41,6 +41,8 @@ func newLinkChecker(concurrency int, transport http.RoundTripper) *LinkChecker {
 }
 
 // checkLink performs a HEAD request and returns true if the link is inaccessible.
+// Some servers reject HEAD but accept GET, so a 403 or 405 on HEAD triggers a
+// lightweight GET fallback to reduce false positives.
 func (lc *LinkChecker) checkLink(ctx context.Context, link string) bool {
 	req, err := http.NewRequestWithContext(ctx, http.MethodHead, link, nil)
 	if err != nil {
@@ -51,7 +53,28 @@ func (lc *LinkChecker) checkLink(ctx context.Context, link string) bool {
 	if err != nil {
 		return ctx.Err() == nil // inaccessible only if context wasn't cancelled
 	}
-	defer func() { _ = resp.Body.Close() }()
+	_ = resp.Body.Close()
+
+	if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusMethodNotAllowed {
+		return lc.getProbe(ctx, link)
+	}
+
+	return resp.StatusCode >= 400
+}
+
+// getProbe sends a minimal-body GET as a fallback when HEAD is rejected.
+func (lc *LinkChecker) getProbe(ctx context.Context, link string) bool {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, link, nil)
+	if err != nil {
+		return true
+	}
+	req.Header.Set("Range", "bytes=0-0")
+
+	resp, err := lc.client.Do(req)
+	if err != nil {
+		return ctx.Err() == nil
+	}
+	_ = resp.Body.Close()
 
 	return resp.StatusCode >= 400
 }
