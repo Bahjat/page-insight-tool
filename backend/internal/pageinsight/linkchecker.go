@@ -32,7 +32,7 @@ func newLinkChecker(concurrency int, transport http.RoundTripper) *LinkChecker {
 	return &LinkChecker{
 		concurrency: concurrency,
 		client: &http.Client{
-			Timeout:   4 * time.Second,
+			Timeout:   2 * time.Second,
 			Transport: transport,
 			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
 				return http.ErrUseLastResponse
