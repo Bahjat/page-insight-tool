@@ -46,14 +46,14 @@ func main() {
 		IdleTimeout:  120 * time.Second,
 	}
 
-	log.Info("server starting", "addr", cfg.Port)
+	log.Info("server starting", "port", cfg.Port)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
 	errCh := make(chan error, 1)
 	go func() {
-		if err := srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 		}
 	}()
@@ -67,10 +67,12 @@ func main() {
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
-	defer cancel()
 
 	if err := srv.Shutdown(ctx); err != nil {
+		cancel()
 		log.Error("forced shutdown", "error", err)
+		os.Exit(1)
 	}
+	defer cancel()
 	log.Info("server stopped")
 }

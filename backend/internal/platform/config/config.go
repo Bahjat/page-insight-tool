@@ -27,7 +27,7 @@ func Load() (Config, error) {
 	cfg := Config{
 		Port:                 getEnv("PORT", "8080"),
 		LogLevel:             getEnv("LOG_LEVEL", "ERROR"),
-		LinkCheckConcurrency: getEnvAsInt("LINK_CHECK_CONCURRENCY", 10),
+		LinkCheckConcurrency: getEnvAsInt("LINK_CHECK_CONCURRENCY", 25),
 		ShutdownTimeout:      time.Duration(getEnvAsInt("SHUTDOWN_TIMEOUT_SECONDS", 10)) * time.Second,
 	}
 

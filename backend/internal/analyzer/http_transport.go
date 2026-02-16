@@ -15,8 +15,6 @@ import (
 
 const analyzeTimeout = 60 * time.Second
 
-var errURLRequired = errors.New("the \"url\" field is required")
-
 // Transport handles HTTP requests for page analysis.
 type Transport struct {
 	service *Service
@@ -37,13 +35,6 @@ type analyzeRequest struct {
 	URL string `json:"url"`
 }
 
-func (r analyzeRequest) validate() error {
-	if r.URL == "" {
-		return errURLRequired
-	}
-	return nil
-}
-
 func (t *Transport) handleAnalyze(w http.ResponseWriter, r *http.Request) {
 	const maxRequestBody = 1 << 20 // 1 MB
 	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBody)
@@ -54,8 +45,8 @@ func (t *Transport) handleAnalyze(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := req.validate(); err != nil {
-		t.renderError(w, http.StatusBadRequest, err.Error())
+	if req.URL == "" {
+		t.renderError(w, http.StatusBadRequest, "the \"url\" field is required")
 		return
 	}
 
@@ -83,7 +74,6 @@ func (t *Transport) handleServiceError(w http.ResponseWriter, err error) {
 		case errs.Timeout:
 			status = http.StatusGatewayTimeout
 		case errs.ParsingFailed, errs.Unknown:
-			// 500 Internal Server Error
 		}
 		t.renderError(w, status, appErr.Message)
 		return

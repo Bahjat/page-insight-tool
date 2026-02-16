@@ -46,7 +46,6 @@ func TestHandleAnalyze_Success(t *testing.T) {
 
 	body := `{"url": "https://example.com"}`
 	req := httptest.NewRequest(http.MethodPost, "/analyze", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
 	mux.ServeHTTP(rec, req)
@@ -64,125 +63,78 @@ func TestHandleAnalyze_Success(t *testing.T) {
 	}
 }
 
-func TestHandleAnalyze_EmptyURL(t *testing.T) {
+func TestHandleAnalyze_ErrorCases(t *testing.T) {
 	mux := newTestMux(&mockProvider{})
 
-	body := `{"url": ""}`
-	req := httptest.NewRequest(http.MethodPost, "/analyze", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	rec := httptest.NewRecorder()
+	tests := []struct {
+		name       string
+		method     string
+		body       string
+		wantStatus int
+	}{
+		{"empty URL", http.MethodPost, `{"url": ""}`, http.StatusBadRequest},
+		{"missing body", http.MethodPost, "", http.StatusBadRequest},
+		{"malformed JSON", http.MethodPost, `{invalid json`, http.StatusBadRequest},
+		{"wrong method", http.MethodGet, "", http.StatusMethodNotAllowed},
+	}
 
-	mux.ServeHTTP(rec, req)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var req *http.Request
+			if tt.body == "" && tt.method == http.MethodGet {
+				req = httptest.NewRequest(tt.method, "/analyze", nil)
+			} else {
+				req = httptest.NewRequest(tt.method, "/analyze", strings.NewReader(tt.body))
+			}
+			rec := httptest.NewRecorder()
 
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+			mux.ServeHTTP(rec, req)
+
+			if rec.Code != tt.wantStatus {
+				t.Errorf("status = %d, want %d", rec.Code, tt.wantStatus)
+			}
+		})
 	}
 }
 
-func TestHandleAnalyze_MissingBody(t *testing.T) {
-	mux := newTestMux(&mockProvider{})
-
-	req := httptest.NewRequest(http.MethodPost, "/analyze", strings.NewReader(""))
-	req.Header.Set("Content-Type", "application/json")
-	rec := httptest.NewRecorder()
-
-	mux.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
-	}
-}
-
-func TestHandleAnalyze_InvalidInputError(t *testing.T) {
-	provider := &mockProvider{
-		err: &errs.AppError{
-			Kind:    errs.InvalidInput,
-			Message: "bad url",
+func TestHandleAnalyze_ServiceErrors(t *testing.T) {
+	tests := []struct {
+		name       string
+		err        error
+		body       string
+		wantStatus int
+	}{
+		{
+			"invalid input",
+			&errs.AppError{Kind: errs.InvalidInput, Message: "bad url"},
+			`{"url": "ftp://bad"}`,
+			http.StatusBadRequest,
+		},
+		{
+			"unreachable",
+			&errs.AppError{Kind: errs.Unreachable, Message: "cannot reach", Cause: context.DeadlineExceeded},
+			`{"url": "https://down.example.com"}`,
+			http.StatusBadGateway,
+		},
+		{
+			"timeout",
+			&errs.AppError{Kind: errs.Timeout, Message: "Analysis timed out. The target URL may be slow to respond.", Cause: context.DeadlineExceeded},
+			`{"url": "https://slow.example.com"}`,
+			http.StatusGatewayTimeout,
 		},
 	}
-	mux := newTestMux(provider)
 
-	body := `{"url": "ftp://bad"}`
-	req := httptest.NewRequest(http.MethodPost, "/analyze", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	rec := httptest.NewRecorder()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mux := newTestMux(&mockProvider{err: tt.err})
+			req := httptest.NewRequest(http.MethodPost, "/analyze", strings.NewReader(tt.body))
+			rec := httptest.NewRecorder()
 
-	mux.ServeHTTP(rec, req)
+			mux.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
-	}
-}
-
-func TestHandleAnalyze_UnreachableError(t *testing.T) {
-	provider := &mockProvider{
-		err: &errs.AppError{
-			Kind:    errs.Unreachable,
-			Message: "cannot reach",
-			Cause:   context.DeadlineExceeded,
-		},
-	}
-	mux := newTestMux(provider)
-
-	body := `{"url": "https://down.example.com"}`
-	req := httptest.NewRequest(http.MethodPost, "/analyze", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	rec := httptest.NewRecorder()
-
-	mux.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusBadGateway {
-		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadGateway)
-	}
-}
-
-func TestHandleAnalyze_Timeout(t *testing.T) {
-	provider := &mockProvider{
-		err: &errs.AppError{
-			Kind:    errs.Timeout,
-			Message: "Analysis timed out. The target URL may be slow to respond.",
-			Cause:   context.DeadlineExceeded,
-		},
-	}
-	mux := newTestMux(provider)
-
-	body := `{"url": "https://slow.example.com"}`
-	req := httptest.NewRequest(http.MethodPost, "/analyze", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	rec := httptest.NewRecorder()
-
-	mux.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusGatewayTimeout {
-		t.Errorf("status = %d, want %d", rec.Code, http.StatusGatewayTimeout)
-	}
-}
-
-func TestHandleAnalyze_MalformedJSON(t *testing.T) {
-	mux := newTestMux(&mockProvider{})
-
-	body := `{invalid json`
-	req := httptest.NewRequest(http.MethodPost, "/analyze", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	rec := httptest.NewRecorder()
-
-	mux.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
-	}
-}
-
-func TestHandleAnalyze_WrongMethod(t *testing.T) {
-	mux := newTestMux(&mockProvider{})
-
-	req := httptest.NewRequest(http.MethodGet, "/analyze", nil)
-	rec := httptest.NewRecorder()
-
-	mux.ServeHTTP(rec, req)
-
-	// ServeMux returns 405 for method mismatch.
-	if rec.Code != http.StatusMethodNotAllowed {
-		t.Errorf("status = %d, want %d", rec.Code, http.StatusMethodNotAllowed)
+			if rec.Code != tt.wantStatus {
+				t.Errorf("status = %d, want %d", rec.Code, tt.wantStatus)
+			}
+		})
 	}
 }

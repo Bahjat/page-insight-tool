@@ -1,12 +1,21 @@
 package pageinsight
 
 import (
+	"bytes"
 	"errors"
 	"io"
 	"net/url"
 	"strings"
 
 	"golang.org/x/net/html"
+)
+
+var (
+	tagTitle = []byte("title")
+	tagA     = []byte("a")
+	tagInput = []byte("input")
+	attrHref = []byte("href")
+	attrType = []byte("type")
 )
 
 // ParseResult holds everything extracted from a single-pass HTML parse.
@@ -50,24 +59,23 @@ func Parse(body io.Reader, baseURL *url.URL) (*ParseResult, error) {
 
 		case html.StartTagToken, html.SelfClosingTagToken:
 			tn, hasAttr := z.TagName()
-			tag := string(tn)
 
 			switch {
-			case tag == "title":
+			case bytes.Equal(tn, tagTitle):
 				inTitle = true
 
-			case isHeading(tag):
-				result.Headings[tag]++
+			case len(tn) == 2 && tn[0] == 'h' && tn[1] >= '1' && tn[1] <= '6':
+				result.Headings[string(tn)]++
 
-			case tag == "a" && hasAttr:
-				if href := extractAttr(z, "href"); href != "" {
+			case bytes.Equal(tn, tagA) && hasAttr:
+				if href := extractAttr(z, attrHref); href != "" {
 					if link, ok := classifyLink(href, baseURL); ok {
 						result.Links = append(result.Links, link)
 					}
 				}
 
-			case tag == "input" && hasAttr:
-				if strings.EqualFold(extractAttr(z, "type"), "password") {
+			case bytes.Equal(tn, tagInput) && hasAttr:
+				if strings.EqualFold(extractAttr(z, attrType), "password") {
 					result.HasLoginForm = true
 				}
 			}
@@ -80,25 +88,17 @@ func Parse(body io.Reader, baseURL *url.URL) (*ParseResult, error) {
 
 		case html.EndTagToken:
 			tn, _ := z.TagName()
-			if string(tn) == "title" {
+			if bytes.Equal(tn, tagTitle) {
 				inTitle = false
 			}
 		}
 	}
 }
 
-func isHeading(tag string) bool {
-	switch tag {
-	case "h1", "h2", "h3", "h4", "h5", "h6":
-		return true
-	}
-	return false
-}
-
-func extractAttr(z *html.Tokenizer, target string) string {
+func extractAttr(z *html.Tokenizer, target []byte) string {
 	for {
 		key, val, more := z.TagAttr()
-		if string(key) == target {
+		if bytes.Equal(key, target) {
 			return string(val)
 		}
 		if !more {
